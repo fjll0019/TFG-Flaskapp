@@ -1,0 +1,40 @@
+{
+    "_shards": {
+        "failed": 0,
+        "skipped": 0,
+        "successful": 5,
+        "total": 5
+    },
+    "hits": {
+        "hits": [
+            {
+                "_id": "other-my-diff",
+                "_index": "contents",
+                "_score": 0.2876821,
+                "_source": {
+                    "content": "What kind of content is this?",
+                    "slug": "other-my-diff",
+                    "timestamp": "2018-02-11T16:08:10.409353",
+                    "title": "Very different title second"
+                },
+                "_type": "title"
+            },
+            {
+                "_id": "other-my",
+                "_index": "contents",
+                "_score": 0.2876821,
+                "_source": {
+                    "content": "What kind of content?",
+                    "slug": "other-my",
+                    "timestamp": "2018-02-11T16:00:51.613402",
+                    "title": "Very different title"
+                },
+                "_type": "title"
+            }
+        ],
+        "max_score": 0.2876821,
+        "total": 2
+    },
+    "timed_out": false,
+    "took": 3
+}
