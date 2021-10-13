@@ -8,6 +8,7 @@ from flask_bcrypt import Bcrypt
 from config import ApplicationConfig
 from models import db,User
 from flask_cors import CORS
+from flask_sqlalchemy import SQLAlchemy
 
 app = Flask(__name__)
 app.config.from_object(ApplicationConfig)
@@ -20,36 +21,73 @@ db.init_app(app)
 with app.app_context():
     db.create_all()
 
-@app.route("/@me")
+@app.route("/@me", methods=['GET'])
 def get_curret_user():
     user_id = session.get("user_id")
-
     if not user_id:
         return jsonify({"error" : "Unauthorized"}) ,401
     
     user = User.query.filter_by(id=user_id).first()
     return jsonify({
         "id": user.id,
-        "email": user.email
+        "email": user.email,
+        "nombre" : user.nombre
     })
 
 @app.route("/register", methods=['GET','POST'])
 def register_user():
-    form = SignupForm()
-    if form.validate_on_submit():
-        email = form.email.data
-        password = form.password.data
-                          
-        user_exists = User.query.filter_by(email=email).first() is not None
 
-        if user_exists:
-            abort(409)
-        hashed_password= bcrypt.generate_password_hash(password)
-        new_user= User(email=email,password=hashed_password)
-        db.session.add(new_user)
+    email = request.json["email"]
+    password = request.json["password"]
+                          
+    user_exists = User.query.filter_by(email=email).first() is not None
+
+    if user_exists:
+        abort(409)
+    hashed_password= bcrypt.generate_password_hash(password)
+    new_user= User(email=email,password=hashed_password)       
+    db.session.add(new_user)
+    db.session.commit()  
+    session["user_id"] = new_user.id
+    session["user_email"] = new_user.email
+    return jsonify({
+        "id": new_user.id,
+        "email": new_user.email
+    })
+
+@app.route("/delete", methods=['GET','POST'])
+def delete_user():
+    db.session.remove(session["user_id"])
+
+@app.route("/perfil", methods=['GET','POST'])
+def update_user():
+    email = request.json["email"]
+    nombre = request.json["nombre"]
+    cambio=0
+    aux =session["user_email"]
+    user = User.query.filter_by(email=aux).first()
+    if user is None:
+        return jsonify({"error": "Unauthorized"}), 401
+
+    if (user.nombre == "nombre por defecto" or user.nombre!= nombre):
+        user.nombre=nombre
+        cambio=cambio+1
+    
+    if (user.email!= nombre):
+        user.email=email
+        session["user_email"]=email
+        cambio=cambio+1
+
+    if cambio==0:
+        return "No ha habido ningún cambio"
+    else:
         db.session.commit()
-        return redirect(url_for('index'))
-    return render_template("signup_form.html", form=form)
+        return jsonify({
+            "nombre": user.nombre,
+            "email": user.email
+        })
+
+
 
 @app.route("/login", methods=['GET','POST'])
 def login_user():
@@ -65,7 +103,7 @@ def login_user():
         return jsonify({"error": "Unauthorized"}), 401
     
     session["user_id"] = user.id
-
+    session["user_email"] = user.email
     return jsonify({
         "id": user.id,
         "email": user.email
