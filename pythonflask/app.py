@@ -45,7 +45,7 @@ def register_user():
     if user_exists:
         abort(409)
     hashed_password= bcrypt.generate_password_hash(password)
-    new_user= User(email=email,password=hashed_password)       
+    new_user= User(email=email,password=hashed_password,nombre=email)       
     db.session.add(new_user)
     db.session.commit()  
     session["user_id"] = new_user.id
@@ -57,7 +57,11 @@ def register_user():
 
 @app.route("/delete", methods=['GET','POST'])
 def delete_user():
-    db.session.remove(session["user_id"])
+    user_id= session["user_id"]
+    User.query.filter_by(id=user_id).delete()
+    db.session.commit()  
+    return "Se ha eliminado el usuario correctamente"
+
 
 @app.route("/perfil", methods=['GET','POST'])
 def update_user():
@@ -87,6 +91,24 @@ def update_user():
             "email": user.email
         })
 
+@app.route("/password", methods=['GET','POST'])
+def update_password():
+    user = User.query.filter_by(email=session["user_email"]).first()
+    password = request.json["password"]
+
+    if user is None:
+        return jsonify({"error": "Unauthorized"}), 401
+
+    if(user.password==password):
+        return jsonify({"error": "La contraseña a la que se intenta cambiar es la misma"}), 400
+
+    if (user.password!=""):
+        user.password=password
+        db.session.commit()
+        return jsonify({
+            "email": user.email,
+            "password" : user.password
+        })
 
 
 @app.route("/login", methods=['GET','POST'])
