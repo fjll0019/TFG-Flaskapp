@@ -39,7 +39,7 @@ def register_user():
 
     email = request.json["email"]
     password = request.json["password"]
-                          
+    nombre=""           
     user_exists = User.query.filter_by(email=email).first() is not None
 
     if user_exists:
@@ -50,9 +50,14 @@ def register_user():
     db.session.commit()  
     session["user_id"] = new_user.id
     session["user_email"] = new_user.email
+    if(new_user.nombre=="nombre por defecto" or new_user.nombre==None):
+        nombre= "user1"
+    else:
+        nombre=new_user.nombre
     return jsonify({
         "id": new_user.id,
-        "email": new_user.email
+        "email": new_user.email,
+        "nombre": nombre
     })
 
 @app.route("/delete", methods=['GET','POST'])
@@ -73,11 +78,11 @@ def update_user():
     if user is None:
         return jsonify({"error": "Unauthorized"}), 401
 
-    if (user.nombre == "nombre por defecto" or user.nombre!= nombre):
+    if (user.nombre == "nombre por defecto" or user.nombre!= nombre and nombre!=""):
         user.nombre=nombre
         cambio=cambio+1
     
-    if (user.email!= nombre):
+    if (user.email!= nombre and email!=""):
         user.email=email
         session["user_email"]=email
         cambio=cambio+1
@@ -95,19 +100,24 @@ def update_user():
 def update_password():
     user = User.query.filter_by(email=session["user_email"]).first()
     password = request.json["password"]
+    lastpassword = request.json["lastPass"]
 
     if user is None:
         return jsonify({"error": "Unauthorized"}), 401
 
-    if(user.password==password):
+    if not bcrypt.check_password_hash(user.password, lastpassword):
+        return jsonify({"error": "La contraseña actual no es correcta"}), 403
+
+    if bcrypt.check_password_hash(user.password, password):
         return jsonify({"error": "La contraseña a la que se intenta cambiar es la misma"}), 400
 
-    if (user.password!=""):
-        user.password=password
+    if (password!=""):
+        hashed_password= bcrypt.generate_password_hash(password)
+        user.password=hashed_password
         db.session.commit()
         return jsonify({
-            "email": user.email,
-            "password" : user.password
+            "nombre": user.nombre,
+            "email": user.email
         })
 
 
@@ -115,7 +125,7 @@ def update_password():
 def login_user():
     email = request.json["email"]
     password = request.json["password"]
-
+    nombre=""
     user = User.query.filter_by(email=email).first()
 
     if user is None:
@@ -124,11 +134,17 @@ def login_user():
     if not bcrypt.check_password_hash(user.password, password):
         return jsonify({"error": "Unauthorized"}), 401
     
+    if(user.nombre=="nombre por defecto" or user.nombre==None):
+        nombre= "user1"
+    else:
+        nombre=user.nombre
+    
     session["user_id"] = user.id
     session["user_email"] = user.email
     return jsonify({
         "id": user.id,
-        "email": user.email
+        "email": user.email,
+        "nombre": nombre
     })
 
 
