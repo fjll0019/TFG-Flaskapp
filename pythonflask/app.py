@@ -1,7 +1,7 @@
 import bcrypt
 from flask import json
 from forms import SignupForm,SigninForm
-from flask import Flask, request,session, abort,render_template,redirect,url_for
+from flask import Flask, request,session, abort,render_template,redirect,url_for,send_from_directory
 from flask.json import jsonify
 from flask_session import Session
 from flask_bcrypt import Bcrypt
@@ -9,10 +9,15 @@ from config import ApplicationConfig
 from models import db,User
 from flask_cors import CORS
 from flask_sqlalchemy import SQLAlchemy
+from werkzeug.utils import secure_filename, send_file
+import os
 
 app = Flask(__name__)
 app.config.from_object(ApplicationConfig)
+UPLOAD_FOLDER = 'static/imgs'
+ALLOWED_EXTENSIONS = set(['png', 'jpg'])
 
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 bcrypt=Bcrypt(app)
 cors = CORS(app, supports_credentials=True)
 server_session = Session(app)
@@ -24,14 +29,16 @@ with app.app_context():
 @app.route("/@me", methods=['GET'])
 def get_curret_user():
     user_id = session.get("user_id")
+    user = User.query.filter_by(id=user_id).first()
     if not user_id:
         return jsonify({"error" : "Unauthorized"}) ,401
-    
+    #filen = UPLOAD_FOLDER+'/'+user.avatar 
     user = User.query.filter_by(id=user_id).first()
     return jsonify({
         "id": user.id,
         "email": user.email,
-        "nombre" : user.nombre
+        "nombre" : user.nombre,
+        "avatar": user.avatar
     })
 
 @app.route("/register", methods=['GET','POST'])
@@ -57,7 +64,8 @@ def register_user():
     return jsonify({
         "id": new_user.id,
         "email": new_user.email,
-        "nombre": nombre
+        "nombre": nombre,
+        "avatar": new_user.avatar
     })
 
 @app.route("/delete", methods=['GET','POST'])
@@ -93,7 +101,8 @@ def update_user():
         db.session.commit()
         return jsonify({
             "nombre": user.nombre,
-            "email": user.email
+            "email": user.email,
+            "avatar": user.avatar
         })
 
 @app.route("/password", methods=['GET','POST'])
@@ -117,7 +126,8 @@ def update_password():
         db.session.commit()
         return jsonify({
             "nombre": user.nombre,
-            "email": user.email
+            "email": user.email,
+            "avatar": user.avatar
         })
 
 
@@ -134,8 +144,6 @@ def login_user():
     if not bcrypt.check_password_hash(user.password, password):
         return jsonify({"error": "Unauthorized"}), 401
     
-    if(user.nombre=="nombre por defecto" or user.nombre==None):
-        nombre= "user1"
     else:
         nombre=user.nombre
     
@@ -144,9 +152,35 @@ def login_user():
     return jsonify({
         "id": user.id,
         "email": user.email,
-        "nombre": nombre
+        "nombre": nombre,
+        "avatar": user.avatar
     })
+@app.route("/logout", methods=['GET','POST'])
+def logut():
+    session.clear
+    
+@app.route("/uploadfile", methods=['GET','POST'])    
+def upload_file():
 
+    user_id = session.get("user_id")
+    if not user_id:
+        return jsonify({"error" : "Unauthorized"}) ,401
+    
+    user = User.query.filter_by(id=user_id).first()
+    if request.method == 'POST':
+        file = request.files['file']
+        print("file es:")
+        print(file)
+        if file.filename == '':
+            return jsonify({"error": "No se ha seleccionado un fichero"}), 404
+        if file:
+            filename = secure_filename(file.filename)
+            file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+            user.avatar=filename
+            db.session.commit()
+            return jsonify({
+                "file": filename
+            })
 
 @app.route("/", methods=['GET'])
 def index():

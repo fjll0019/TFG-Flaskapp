@@ -11,3 +11,4 @@ class User(db.Model):
     email = db.Column(db.String(345), unique = True)
     password = db.Column(db.Text, nullable= False)
     nombre = db.Column(db.String(70), default="nombre por defecto")
+    avatar = db.Column(db.String(70), default="avatar.jpg")
