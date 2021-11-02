@@ -1,6 +1,5 @@
 import bcrypt
 from flask import json
-from forms import SignupForm,SigninForm
 from flask import Flask, request,session, abort,render_template,redirect,url_for,send_from_directory
 from flask.json import jsonify
 from flask_session import Session
@@ -11,13 +10,21 @@ from flask_cors import CORS
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.utils import secure_filename, send_file
 import os
+from elasticsearch import Elasticsearch
 
 app = Flask(__name__)
 app.config.from_object(ApplicationConfig)
 UPLOAD_FOLDER = 'static/imgs'
+UPLOAD_FOLDER2 = 'static/data'
+
 ALLOWED_EXTENSIONS = set(['png', 'jpg'])
 
+#es= Elasticsearch()
+
+
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+app.config['UPLOAD_FOLDER2'] = UPLOAD_FOLDER2
+
 bcrypt=Bcrypt(app)
 cors = CORS(app, supports_credentials=True)
 server_session = Session(app)
@@ -32,7 +39,6 @@ def get_curret_user():
     user = User.query.filter_by(id=user_id).first()
     if not user_id:
         return jsonify({"error" : "Unauthorized"}) ,401
-    #filen = UPLOAD_FOLDER+'/'+user.avatar 
     user = User.query.filter_by(id=user_id).first()
     return jsonify({
         "id": user.id,
@@ -182,6 +188,29 @@ def upload_file():
                 "file": filename
             })
 
+@app.route("/uploadData", methods=['GET','POST'])    
+def upload_data():
+
+    user_id = session.get("user_id")
+    if not user_id:
+        return jsonify({"error" : "Unauthorized"}) ,401
+    
+    user = User.query.filter_by(id=user_id).first()
+    if request.method == 'POST':
+        file = request.files['file']
+        print("file es:")
+        print(file)
+        if file.filename == '':
+            return jsonify({"error": "No se ha seleccionado un fichero"}), 404
+        if file:
+            filename = secure_filename(file.filename)
+            file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+            user.avatar=filename
+            db.session.commit()
+            return jsonify({
+                "file": filename
+            })
+            
 @app.route("/", methods=['GET'])
 def index():
     return render_template("index.html")
