@@ -5,7 +5,7 @@ from flask.json import jsonify
 from flask_session import Session
 from flask_bcrypt import Bcrypt
 from config import ApplicationConfig
-from models import db,User
+from models import db,User,Datos
 from flask_cors import CORS
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.utils import secure_filename, send_file
@@ -37,14 +37,21 @@ with app.app_context():
 def get_curret_user():
     user_id = session.get("user_id")
     user = User.query.filter_by(id=user_id).first()
-    if not user_id:
+    if user==None:
         return jsonify({"error" : "Unauthorized"}) ,401
     user = User.query.filter_by(id=user_id).first()
+    datas=[]
+    datos = Datos.query.filter_by(owner_id=user.id).all()
+    for data in datos:
+        datas.append(data.name)
+    print(datas)
     return jsonify({
         "id": user.id,
         "email": user.email,
         "nombre" : user.nombre,
-        "avatar": user.avatar
+        "avatar": user.avatar,
+        "data": datas
+       
     })
 
 @app.route("/register", methods=['GET','POST'])
@@ -58,8 +65,12 @@ def register_user():
     if user_exists:
         abort(409)
     hashed_password= bcrypt.generate_password_hash(password)
-    new_user= User(email=email,password=hashed_password,nombre=email)       
+    new_user= User(email=email,password=hashed_password,nombre=email)  
+    new_datos = Datos()
+    new_datos.owner = new_user.id  
+    db.session.add(new_datos) 
     db.session.add(new_user)
+
     db.session.commit()  
     session["user_id"] = new_user.id
     session["user_email"] = new_user.email
@@ -81,6 +92,13 @@ def delete_user():
     db.session.commit()  
     return "Se ha eliminado el usuario correctamente"
 
+@app.route("/deleteData", methods=['GET','POST'])
+def delete_data():
+    filename = request.json["filename"]
+    user_id= session["user_id"]
+    Datos.query.filter_by(owner_id=user_id,nombre=filename).delete()
+    db.session.commit()  
+    return "Se ha eliminado el usuario correctamente"
 
 @app.route("/perfil", methods=['GET','POST'])
 def update_user():
@@ -100,15 +118,16 @@ def update_user():
         user.email=email
         session["user_email"]=email
         cambio=cambio+1
-
     if cambio==0:
         return "No ha habido ningún cambio"
+   
+
     else:
         db.session.commit()
         return jsonify({
             "nombre": user.nombre,
             "email": user.email,
-            "avatar": user.avatar
+            "avatar": user.avatar,
         })
 
 @app.route("/password", methods=['GET','POST'])
@@ -204,12 +223,34 @@ def upload_data():
             return jsonify({"error": "No se ha seleccionado un fichero"}), 404
         if file:
             filename = secure_filename(file.filename)
-            file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
-            user.avatar=filename
+           
+            datos = Datos.query.filter_by(owner_id=user.id,name=filename).all()
+            for data in datos:
+                if(data.name==filename):
+                    return jsonify({
+                     "error" : "Fallo, el archivo está repetido"
+                    }),409
+            data = Datos(name=filename,owner_id=user.id)
+            db.session.add(data)
             db.session.commit()
+            print("nuevo fichero")
+            print(filename)
+            datos = Datos.query.filter_by(owner_id=user.id).all()
+            print("Ficheros del usuario")
+            datas=[]
+            for data in datos:
+                datas.append(data.name)
+            print(datas)
+            file.save(os.path.join(app.config['UPLOAD_FOLDER2'], filename))
             return jsonify({
-                "file": filename
+            "id": user.id,
+            "email": user.email,
+            "nombre": user.nombre,
+             "data" : datas
             })
+    return jsonify({
+        "error" : "Fallo al subir el archivo"
+    }),500
             
 @app.route("/", methods=['GET'])
 def index():
