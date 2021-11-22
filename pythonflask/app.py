@@ -33,12 +33,22 @@ db.init_app(app)
 with app.app_context():
     db.create_all()
 
+class Usuario:
+  def __init__(self, name, email,datos):
+    self.name = name
+    self.email = email
+    self.datos = datos
+  def toJSON(self):
+        return json.dumps(self, default=lambda o: o.__dict__, 
+            sort_keys=True, indent=4)
+
 @app.route("/@me", methods=['GET'])
 def get_curret_user():
     user_id = session.get("user_id")
     user = User.query.filter_by(id=user_id).first()
     if user==None:
         return jsonify({"error" : "Unauthorized"}) ,401
+    
     user = User.query.filter_by(id=user_id).first()
     datas=[]
     datos = Datos.query.filter_by(owner_id=user.id).all()
@@ -50,8 +60,35 @@ def get_curret_user():
         "email": user.email,
         "nombre" : user.nombre,
         "avatar": user.avatar,
-        "data": datas
+        "data": datas,
+        "rol" : user.rol
        
+    })
+@app.route("/listUsers", methods=['GET'])
+def get_user_list():
+    user_id = session.get("user_id")
+    user = User.query.filter_by(id=user_id).first()
+    if user==None:
+        return jsonify({"error" : "Unauthorized"}) ,401
+    if user.rol!="ADMIN":
+        return jsonify({"error" : "Unauthorized"}) ,401
+
+    list =[]
+    users = User.query.filter_by().all()
+    for user in users:
+        datas=[]
+        datos = Datos.query.filter_by(owner_id=user.id).all()
+        for data in datos:
+            datas.append(data.name)
+        list.append(Usuario(user.nombre,user.email,datos))
+    usuarios = []
+    for user in list:
+        user = user.toJSON()
+        userData = json.loads(user)
+        usuarios.append(userData)
+    print(usuarios)
+    return ({
+        "usuarios": usuarios
     })
 
 @app.route("/register", methods=['GET','POST'])
@@ -65,7 +102,11 @@ def register_user():
     if user_exists:
         abort(409)
     hashed_password= bcrypt.generate_password_hash(password)
-    new_user= User(email=email,password=hashed_password,nombre=email)  
+
+    if email== "admin@gmail.com":
+        new_user= User(email=email,password=hashed_password,nombre=email,rol="ADMIN")  
+    else:
+        new_user= User(email=email,password=hashed_password,nombre=email)  
     new_datos = Datos()
     new_datos.owner = new_user.id  
     db.session.add(new_datos) 
@@ -82,7 +123,8 @@ def register_user():
         "id": new_user.id,
         "email": new_user.email,
         "nombre": nombre,
-        "avatar": new_user.avatar
+        "avatar": new_user.avatar,
+        "rol": new_user.rol
     })
 
 @app.route("/delete", methods=['GET','POST'])

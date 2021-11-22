@@ -15,7 +15,9 @@ class User(db.Model):
     password = db.Column(db.Text, nullable= False)
     nombre = db.Column(db.String(70), default="nombre por defecto")
     avatar = db.Column(db.String(70), default="avatar.jpg")
+    rol = db.Column(db.String(70), default="USER")
     datos= db.relationship('Datos',backref='users')
+
 
 
 class Datos(db.Model):
