@@ -80,13 +80,12 @@ def get_user_list():
         datos = Datos.query.filter_by(owner_id=user.id).all()
         for data in datos:
             datas.append(data.name)
-        list.append(Usuario(user.nombre,user.email,datos))
+        list.append(Usuario(user.nombre,user.email,datas))
     usuarios = []
     for user in list:
         user = user.toJSON()
         userData = json.loads(user)
         usuarios.append(userData)
-    print(usuarios)
     return ({
         "usuarios": usuarios
     })
