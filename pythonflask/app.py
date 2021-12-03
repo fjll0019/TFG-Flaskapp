@@ -55,6 +55,7 @@ def get_curret_user():
     for data in datos:
         datas.append(data.name)
     print(datas)
+    print(user.rol)
     return jsonify({
         "id": user.id,
         "email": user.email,
