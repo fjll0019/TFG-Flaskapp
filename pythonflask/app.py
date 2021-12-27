@@ -65,6 +65,31 @@ def get_curret_user():
         "rol" : user.rol
        
     })
+
+
+
+@app.route("/DataList", methods=['POST'])
+def get_User_data():
+    email = request.json["useremail"]
+    print(email)
+    user_exists = User.query.filter_by(email=email).first()
+    datas=[]
+    if(user_exists!= None):
+       
+        datos = Datos.query.filter_by(owner_id=user_exists.id).all()
+        for data in datos:
+            datas.append(data.name)
+        print(datas)
+        return ({
+        "data": datas
+         })
+    else:
+        return({
+        "data": datas
+        })
+    
+    
+
 @app.route("/listUsers", methods=['GET'])
 def get_user_list():
     user_id = session.get("user_id")
@@ -113,8 +138,6 @@ def register_user():
     db.session.add(new_user)
 
     db.session.commit()  
-    session["user_id"] = new_user.id
-    session["user_email"] = new_user.email
     if(new_user.nombre=="nombre por defecto" or new_user.nombre==None):
         nombre= "user1"
     else:
@@ -133,6 +156,16 @@ def delete_user():
     User.query.filter_by(id=user_id).delete()
     db.session.commit()  
     return "Se ha eliminado el usuario correctamente"
+
+@app.route("/deleteUser", methods=['GET','POST'])
+def delete_user2(): 
+    email= request.json["email"]   
+    user_exists = User.query.filter_by(email=email).first() is not None
+    if user_exists== True:
+        User.query.filter_by(email=email).delete()
+        db.session.commit()  
+        return "Se ha eliminado el usuario correctamente"
+    return "El usuario no existe"
 
 @app.route("/deleteData", methods=['GET','POST'])
 def delete_data():
