@@ -1,14 +1,13 @@
 import bcrypt
 from flask import json
-from flask import Flask, request,session, abort,render_template,redirect,url_for,send_from_directory
+from flask import Flask, request,session, abort,render_template
 from flask.json import jsonify
 from flask_session import Session
 from flask_bcrypt import Bcrypt
 from config import ApplicationConfig
 from models import db,User,Datos
 from flask_cors import CORS
-from flask_sqlalchemy import SQLAlchemy
-from werkzeug.utils import secure_filename, send_file
+from werkzeug.utils import secure_filename
 import os
 from elasticsearch import Elasticsearch
 
@@ -20,7 +19,6 @@ UPLOAD_FOLDER2 = 'static/data'
 ALLOWED_EXTENSIONS = set(['png', 'jpg'])
 
 #es= Elasticsearch()
-
 
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 app.config['UPLOAD_FOLDER2'] = UPLOAD_FOLDER2
@@ -66,8 +64,6 @@ def get_curret_user():
        
     })
 
-
-
 @app.route("/DataList", methods=['POST'])
 def get_User_data():
     email = request.json["useremail"]
@@ -88,8 +84,6 @@ def get_User_data():
         "data": datas
         })
     
-    
-
 @app.route("/listUsers", methods=['GET'])
 def get_user_list():
     user_id = session.get("user_id")
@@ -170,8 +164,9 @@ def delete_user2():
 @app.route("/deleteData", methods=['GET','POST'])
 def delete_data():
     filename = request.json["filename"]
-    user_id= session["user_id"]
-    Datos.query.filter_by(owner_id=user_id,nombre=filename).delete()
+    email = request.json["email"]
+    user = User.query.filter_by(email=email).first()
+    Datos.query.filter_by(owner_id=user.id,name=filename).delete()
     db.session.commit()  
     return "Se ha eliminado el usuario correctamente"
 
