@@ -16,7 +16,7 @@ app.config.from_object(ApplicationConfig)
 UPLOAD_FOLDER = 'static/imgs'
 UPLOAD_FOLDER2 = 'static/data'
 
-ALLOWED_EXTENSIONS = set(['png', 'jpg'])
+ALLOWED_EXTENSIONS = {'csv'}
 
 #es= Elasticsearch()
 
@@ -185,11 +185,14 @@ def update_user():
         cambio=cambio+1
     
     if (user.email!= nombre and email!=""):
+        user_exists = User.query.filter_by(email=email).first() is not None
+        if user_exists:
+            abort(409)
         user.email=email
         session["user_email"]=email
         cambio=cambio+1
     if cambio==0:
-        return "No ha habido ningún cambio"
+       return jsonify({"error": "No ha habido ningún cambio"}), 409
    
 
     else:
@@ -291,7 +294,7 @@ def upload_data():
         print(file)
         if file.filename == '':
             return jsonify({"error": "No se ha seleccionado un fichero"}), 404
-        if file:
+        if file and allowed_file(file.filename):
             filename = secure_filename(file.filename)
            
             datos = Datos.query.filter_by(owner_id=user.id,name=filename).all()
@@ -321,7 +324,11 @@ def upload_data():
     return jsonify({
         "error" : "Fallo al subir el archivo"
     }),500
-            
+
+def allowed_file(filename):
+    return '.' in filename and \
+           filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
 @app.route("/", methods=['GET'])
 def index():
     return render_template("index.html")
