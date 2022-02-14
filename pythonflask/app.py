@@ -52,8 +52,6 @@ def get_curret_user():
     datos = Datos.query.filter_by(owner_id=user.id).all()
     for data in datos:
         datas.append(data.name)
-    print(datas)
-    print(user.rol)
     return jsonify({
         "id": user.id,
         "email": user.email,
@@ -67,7 +65,6 @@ def get_curret_user():
 @app.route("/DataList", methods=['POST'])
 def get_User_data():
     email = request.json["useremail"]
-    print(email)
     user_exists = User.query.filter_by(email=email).first()
     datas=[]
     if(user_exists!= None):
@@ -75,13 +72,35 @@ def get_User_data():
         datos = Datos.query.filter_by(owner_id=user_exists.id).all()
         for data in datos:
             datas.append(data.name)
-        print(datas)
         return ({
         "data": datas
          })
     else:
         return({
         "data": datas
+        })
+
+#TODO: Arreglar método
+@app.route("/getData", methods=['GET'])
+def get_data():
+    print("Print de request: ")
+    print(request)
+    startDate = request.json["startDate"]
+    finishDate = request.json["finishDate"]
+    files=request.json["addedDevices"]
+    user_id = session.get("user_id")
+    user = User.query.filter_by(id=user_id).first()
+    if(user!= None):
+        print(startDate)
+        print(finishDate)
+        print(files)
+
+        return ({
+            "hay datos"
+         })
+    else:
+        return({
+            "No hay datos"
         })
     
 @app.route("/listUsers", methods=['GET'])
@@ -267,8 +286,6 @@ def upload_file():
     user = User.query.filter_by(id=user_id).first()
     if request.method == 'POST':
         file = request.files['file']
-        print("file es:")
-        print(file)
         if file.filename == '':
             return jsonify({"error": "No se ha seleccionado un fichero"}), 404
         if file:
@@ -290,8 +307,6 @@ def upload_data():
     user = User.query.filter_by(id=user_id).first()
     if request.method == 'POST':
         file = request.files['file']
-        print("file es:")
-        print(file)
         if file.filename == '':
             return jsonify({"error": "No se ha seleccionado un fichero"}), 404
         if file and allowed_file(file.filename):
@@ -306,14 +321,11 @@ def upload_data():
             data = Datos(name=filename,owner_id=user.id)
             db.session.add(data)
             db.session.commit()
-            print("nuevo fichero")
-            print(filename)
+
             datos = Datos.query.filter_by(owner_id=user.id).all()
-            print("Ficheros del usuario")
             datas=[]
             for data in datos:
                 datas.append(data.name)
-            print(datas)
             file.save(os.path.join(app.config['UPLOAD_FOLDER2'], filename))
             return jsonify({
             "id": user.id,
