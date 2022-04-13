@@ -1,3 +1,4 @@
+from datetime import datetime
 import bcrypt
 from flask import json
 from flask import Flask, request,session, abort,render_template
@@ -10,6 +11,7 @@ from flask_cors import CORS
 from werkzeug.utils import secure_filename
 import os
 from elasticsearch import Elasticsearch
+import csv
 
 app = Flask(__name__)
 app.config.from_object(ApplicationConfig)
@@ -17,7 +19,6 @@ UPLOAD_FOLDER = 'static/imgs'
 UPLOAD_FOLDER2 = 'static/data'
 
 ALLOWED_EXTENSIONS = {'csv'}
-
 #es= Elasticsearch()
 
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
@@ -40,10 +41,27 @@ class Usuario:
         return json.dumps(self, default=lambda o: o.__dict__, 
             sort_keys=True, indent=4)
 
+class energyData:
+ def __init__(self, energia, acPower,voltage,powerFactor,apPower,current,fechas,name ):
+    self.energia=energia
+    self.acPower=acPower
+    self.voltage=voltage
+    self.powerFactor=powerFactor
+    self.apPower=apPower
+    self.current=current
+    self.fechas=fechas
+    self.name=name
+   # self.reactivePower=reactivePower
+ def toJSON(self):
+        return json.dumps(self, default=lambda o: o.__dict__, 
+            sort_keys=True, indent=4)
+
 @app.route("/@me", methods=['GET'])
 def get_curret_user():
+    global allDates
     user_id = session.get("user_id")
     user = User.query.filter_by(id=user_id).first()
+   # new_csv()
     if user==None:
         return jsonify({"error" : "Unauthorized"}) ,401
     
@@ -52,16 +70,259 @@ def get_curret_user():
     datos = Datos.query.filter_by(owner_id=user.id).all()
     for data in datos:
         datas.append(data.name)
+    es= Elasticsearch(['localhost:9200'])
+    body={"size":100}
+
+    resp=es.indices.get('*').keys()
+    sorted_list=sorted(resp)
+    test_str='.'
+    indices = []
+    allEnergyData = []
+    fechas=[]
+    energia=[]
+    activePower=[]
+    voltage=[]
+    powerFactor=[]
+    apparentPower=[]
+    current=[]
+    for sub in sorted_list:
+        flag = 0
+        for ele in sub:
+            if ele in test_str:
+                flag = 1
+        if not flag:
+            indices.append(sub)  
+
+    for index in indices:
+   
+        resp=es.search(index=index,body=body)   
+        data2 = [doc2 for doc2 in resp['hits']['hits']]
+        #print(data2)
+        cont=0
+        print(index)
+        for doc2 in data2:
+        #   print(doc2)
+            fechaaux=doc2['_source']["Fecha"]
+            #print(energia)
+
+            if fechaaux not in fechas:
+                if len(fechas)>0:
+                    date1 = datetime.strptime(fechaaux, "%d/%m/%Y:%H")
+                    date2 = datetime.strptime(fechas[cont], "%d/%m/%Y:%H")
+                    print(date1<date2)
+                    if date1 < date2:
+                        fechas.insert(cont,fechaaux)
+                        energia.insert(cont,doc2['_source']["Energia"])
+                        activePower.insert(cont,doc2['_source']["P_Activa"])
+                        voltage.insert(cont,doc2['_source']["Tension"])
+                        powerFactor.insert(cont,doc2['_source']["F_Potencia"])
+                        apparentPower.insert(cont,doc2['_source']["P_Aparente"])
+                        current.insert(cont,doc2['_source']["Intensidad"])
+                        cont=cont+1
+                    else:
+                        fechas.append(fechaaux)
+                        energia.append(doc2['_source']["Energia"])
+                        activePower.append(doc2['_source']["P_Activa"])
+                        voltage.append(doc2['_source']["Tension"])
+                        powerFactor.append(doc2['_source']["F_Potencia"])
+                        apparentPower.append(doc2['_source']["P_Aparente"])
+                        current.append(doc2['_source']["Intensidad"])
+                else:
+                    fechas.append(fechaaux)
+                    energia.append(doc2['_source']["Energia"])
+                    activePower.append(doc2['_source']["P_Activa"])
+                    voltage.append(doc2['_source']["Tension"])
+                    powerFactor.append(doc2['_source']["F_Potencia"])
+                    apparentPower.append(doc2['_source']["P_Aparente"])
+                    current.append(doc2['_source']["Intensidad"])
+            else:
+                i=0
+                while len(fechas):
+                    if fechas[i] == fechaaux:
+                        #print(fechaaux)
+                        energia[i]=(energia[i]+(doc2['_source']["Energia"]))/2
+                        activePower[i]=(activePower[i]+doc2['_source']["P_Activa"])/2
+                        voltage[i]=(voltage[i]+doc2['_source']["Tension"])/2
+                        powerFactor[i]=(powerFactor[i]+doc2['_source']["F_Potencia"])/2
+                        apparentPower[i]=(apparentPower[i]+doc2['_source']["P_Aparente"])/2
+                        current[i]=(current[i]+doc2['_source']["Intensidad"])/2
+
+                        break
+                    i+=1
+        #  reactivePower.append(doc['_source']["P_Aparente(VA)"])
+
+    fechas.sort(key=lambda date: datetime.strptime(date, "%d/%m/%Y:%H"))
+    allDates=fechas
     return jsonify({
         "id": user.id,
         "email": user.email,
         "nombre" : user.nombre,
         "avatar": user.avatar,
         "data": datas,
-        "rol" : user.rol
-       
+        "rol" : user.rol , 
+        "indices": indices,
+        "mediaCurrent":current,
+        "mediaEnergia":energia,
+        "mediaActivePower":activePower,
+        "mediaVoltage":voltage,
+        "mediaPowerFactor":powerFactor,
+        "mediaApparentPower":apparentPower,
+        "mediaCurrent":current,
+        "labels": fechas
     })
 
+@app.route("/getData", methods=['GET'])
+def get_data():
+    startDate = request.args['startDate']
+    finishDate =request.args['finishDate']
+    files=request.args.getlist('deviceList[]')
+    user_id = session.get("user_id")
+    user = User.query.filter_by(id=user_id).first()
+    es= Elasticsearch(['localhost:9200'])
+    lista = []
+    fechas=[]
+    for index in files:
+        
+        body={"size":100}
+        resp=es.search(index=index,body=body,scroll='5s')  
+        newSize=len(allDates)
+        energia=[0] * newSize
+        activePower=[0] * newSize
+        voltage=[0] * newSize
+        powerFactor=[0] * newSize
+        apparentPower=[0]* newSize
+        current=[0] * newSize
+        fechas=[0]*newSize
+        cont=0
+        parsedDates=False
+        isDateGreater=False
+        #print(resp['hits']['hits'])
+        data = [doc for doc in resp['hits']['hits']]    
+        for doc in data:
+            #print(doc)
+            #fechaaux2=fechaaux.split(".", 1)
+            #if fechaaux2[0] in fechas:
+            fecha=doc['_source']["Fecha"]
+            i=0
+            if parsedDates==False:
+                date1 = datetime.strptime(fecha, "%d/%m/%Y:%H")
+                date2 = datetime.strptime(allDates[i], "%d/%m/%Y:%H")
+                isDateGreater=date1 > date2
+            while isDateGreater==True:
+                print(i)
+                energia[i]=0
+                activePower[i]=0
+                voltage[i]=0
+                powerFactor[i]=0
+                apparentPower[i]=0
+                current[i]=0
+                i=i+1
+                date1 = datetime.strptime(fecha, "%d/%m/%Y:%H")
+                date2 = datetime.strptime(allDates[i], "%d/%m/%Y:%H")
+                isDateGreater=date1 > date2
+                cont=i
+            parsedDates=True
+            energia[cont]=((float(doc['_source']["Energia"])))
+            activePower[cont]=((float(doc['_source']["P_Activa"])))
+            voltage[cont]=((float(doc['_source']["Tension"])))
+            powerFactor[cont]=((float(doc['_source']["F_Potencia"])))
+            apparentPower[cont]=((float(doc['_source']["P_Aparente"])))
+            current[cont]=((float(doc['_source']["Intensidad"])))
+            fechas[cont]=doc['_source']["Fecha"]
+            cont+=1
+        print(energia)
+        datosEnergia= energyData(energia,activePower,voltage,powerFactor,apparentPower,current,fechas,index)
+        datosEnergia = datosEnergia.toJSON()
+        jsonEnergia = json.loads(datosEnergia)
+        lista.append(jsonEnergia)
+    if(user!= None):
+        return jsonify({
+           "data": lista,
+         })
+    else:
+        return jsonify({
+           "data": "No hay datos"
+        })
+
+def new_csv():
+    es= Elasticsearch(['localhost:9200'])
+    resp=es.indices.get('*').keys()
+    sorted_list=sorted(resp)
+    test_str='.'
+    indices = []
+
+    for sub in sorted_list:
+        flag = 0
+        for ele in sub:
+            if ele in test_str:
+                flag = 1
+        if not flag:
+            indices.append(sub) 
+    lista = []
+    size=10
+    body={"size":size}
+
+    for index in indices:
+        newRows=[]
+        newRows.append(['Fecha','Tension','Intensidad','F.Potencia','P.Activa','P.Aparente','Energia'])
+        auxenergia=0
+        auxactivePower=0
+        auxvoltage=0
+        auxCurrent=0
+        auxPowerFactor=0
+        auxapparentPower=0
+        resp=es.search(index=index,body=body,scroll='20s')   
+        old_scroll_id = resp['_scroll_id']     
+        fechahora=""
+        contmedia=0
+
+        while len(resp['hits']['hits']):
+            resp = es.scroll(
+                scroll_id = old_scroll_id,
+                scroll = '20s', # length of time to keep search context
+            )
+            old_scroll_id = resp['_scroll_id']
+            data = [doc for doc in resp['hits']['hits']]    
+            cont=0
+            fechaaux=""
+            for doc in data:
+                
+                if cont==0:
+                    fechaaux=doc['_source']["Fecha"]
+                    hora=doc['_source']["Hora"]
+                    fechaaux2=hora.split(":", 1)
+                    fechaaux =fechaaux+":"+fechaaux2[0]
+                    #print(fechaaux)
+                    
+                auxenergia+=((float(doc['_source']["Energ�a(kWh)"].replace(',','.'))))
+                auxactivePower+=((float(doc['_source']["P_Activa(W)"].replace(',','.'))))
+                auxvoltage+=((float(doc['_source']["Tensi�n(V)"].replace(',','.'))))
+                auxPowerFactor+=((float(doc['_source']["F_Potencia"].replace(',','.'))))
+                auxapparentPower+=((float(doc['_source']["P_Aparente(VA)"].replace(',','.'))))
+                auxCurrent+=((float(doc['_source']["Intensidad(A)"].replace(',','.'))))
+                contmedia+=1
+                cont+=1
+            if fechahora!= fechaaux:    	 
+                fechahora=fechaaux 
+                if contmedia==0:
+                    contmedia=1        
+                row=[fechaaux,str(round(auxCurrent/contmedia, 2)),str(round(auxvoltage/contmedia, 2)),str(round(auxPowerFactor/contmedia, 2)),str(round(auxactivePower/contmedia, 2)),str(round(auxapparentPower/contmedia, 2)),str(round(auxenergia/contmedia,5))]
+                newRows.append(row)
+                auxenergia=0
+                auxactivePower=0
+                auxvoltage=0
+                auxCurrent=0
+                auxPowerFactor=0
+                auxapparentPower=0
+                contmedia=0
+           # print(row)
+        myFile = open('static/data/'+index+'1h.csv', 'w', encoding='UTF8',newline='')
+        with myFile as csvfile:
+            writer = csv.writer(myFile)
+            writer.writerows(newRows)
+        #print("Writing complete on :" + index)
+
+   
 @app.route("/DataList", methods=['POST'])
 def get_User_data():
     email = request.json["useremail"]
@@ -78,29 +339,6 @@ def get_User_data():
     else:
         return({
         "data": datas
-        })
-
-#TODO: Arreglar método
-@app.route("/getData", methods=['GET'])
-def get_data():
-    print("Print de request: ")
-    print(request)
-    startDate = request.json["startDate"]
-    finishDate = request.json["finishDate"]
-    files=request.json["addedDevices"]
-    user_id = session.get("user_id")
-    user = User.query.filter_by(id=user_id).first()
-    if(user!= None):
-        print(startDate)
-        print(finishDate)
-        print(files)
-
-        return ({
-            "hay datos"
-         })
-    else:
-        return({
-            "No hay datos"
         })
     
 @app.route("/listUsers", methods=['GET'])
@@ -183,9 +421,8 @@ def delete_user2():
 @app.route("/deleteData", methods=['GET','POST'])
 def delete_data():
     filename = request.json["filename"]
-    email = request.json["email"]
-    user = User.query.filter_by(email=email).first()
-    Datos.query.filter_by(owner_id=user.id,name=filename).delete()
+    user_id= session["user_id"]
+    Datos.query.filter_by(owner_id=user_id,name=filename).delete()
     db.session.commit()  
     return "Se ha eliminado el usuario correctamente"
 
@@ -211,9 +448,7 @@ def update_user():
         session["user_email"]=email
         cambio=cambio+1
     if cambio==0:
-       return jsonify({"error": "No ha habido ningún cambio"}), 409
-   
-
+        return "No ha habido ningún cambio"
     else:
         db.session.commit()
         return jsonify({
