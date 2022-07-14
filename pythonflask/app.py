@@ -24,7 +24,6 @@ UPLOAD_FOLDER = 'static/imgs'
 UPLOAD_FOLDER2 = 'static/data'
 
 ALLOWED_EXTENSIONS = {'csv'}
-#es= Elasticsearch()
 
 smtp_address = 'smtp.gmail.com'
 smtp_port = 465
@@ -74,7 +73,6 @@ def get_curret_user():
     user_id = session.get("user_id")
     if user_id != None:
         user = User.query.filter_by(id=user_id).first()
-    # new_csv()
         if user==None:
             return jsonify({"error" : "Unauthorized"}) ,401
         
@@ -109,22 +107,17 @@ def get_curret_user():
     
             resp=es.search(index=index,body=body)   
             data2 = [doc2 for doc2 in resp['hits']['hits']]
-        # print(data2)
             cont=0
-        # print(index)
             for doc2 in data2:
-                #print(doc2)
                 if doc2['_source'] != {}:
                     horaaux=doc2['_source']["Hora"]
                     fechaaux2=doc2['_source']["Fecha"]
                     fechaaux=fechaaux2+":"+ str(horaaux)
-                #print(energia)
 
                 if fechaaux not in fechas:
                     if len(fechas)>0:
                         date1 = datetime.strptime(fechaaux, "%d/%m/%Y:%H")
                         date2 = datetime.strptime(fechas[cont], "%d/%m/%Y:%H")
-                    # print(date1<date2)
                         if date1 < date2:
                             fechas.insert(cont,fechaaux)
                             energia.insert(cont,doc2['_source']["Energia"])
@@ -152,11 +145,8 @@ def get_curret_user():
                         current.append(doc2['_source']["Intensidad"])
                 else:
                     i=0
-                #  print(len(fechas))
                     while i< len(fechas):
-                        #print(i)
                         if fechas[i] == fechaaux:
-                            #print(fechaaux)
                             if doc2['_source'] != {}:
                                 energia[i]=(energia[i]+(doc2['_source']["Energia"]))/2
                                 activePower[i]=(activePower[i]+doc2['_source']["P_Activa"])/2
@@ -204,10 +194,8 @@ def get_data():
     es= Elasticsearch(['localhost:9200'])
     lista = []
     fechas=[]
-    #print(allDates)
 
     for index in files:
-        #
         body={"size":100,"query": {"bool":{"must":[{"range": {"Fecha": {"gte": startDate,"lte": finishDate}}}]}}}
         resp=es.search(index=index,body=body,scroll='5s')  
         newSize=len(allDates)
@@ -221,12 +209,9 @@ def get_data():
         cont=0
         parsedDates=False
         isDateGreater=False
-       # print(resp['hits']['hits'])
         data = [doc for doc in resp['hits']['hits']]    
         for doc in data:
-            #print(doc)
-            #fechaaux2=fechaaux.split(".", 1)
-            #if fechaaux2[0] in fechas:
+           
             if doc['_source'] != {}:
                 horaaux=doc['_source']["Hora"]
                 fechaaux2=doc['_source']["Fecha"]
@@ -237,7 +222,6 @@ def get_data():
                 date2 = datetime.strptime(allDates[i], "%d/%m/%Y:%H")
                 isDateGreater=date1 > date2
             while isDateGreater==True:
-              #  print(i)
                 energia[i]=0
                 activePower[i]=0
                 voltage[i]=0
@@ -259,7 +243,6 @@ def get_data():
                 current[cont]=((float(doc['_source']["Intensidad"])))
                 fechas[cont]=doc['_source']["Fecha"]
             cont+=1
-      #  print(energia)
         datosEnergia= energyData(energia,activePower,voltage,powerFactor,apparentPower,current,fechas,index)
         datosEnergia = datosEnergia.toJSON()
         jsonEnergia = json.loads(datosEnergia)
@@ -321,7 +304,6 @@ def new_csv():
                     hora=doc['_source']["Hora"]
                     fechaaux2=hora.split(":", 1)
                     fechaaux =fechaaux+":"+fechaaux2[0]
-                    #print(fechaaux)
                     
                 auxenergia+=((float(doc['_source']["Energ�a(kWh)"].replace(',','.'))))
                 auxactivePower+=((float(doc['_source']["P_Activa(W)"].replace(',','.'))))
@@ -344,12 +326,10 @@ def new_csv():
                 auxPowerFactor=0
                 auxapparentPower=0
                 contmedia=0
-           # print(row)
         myFile = open('static/data/'+index+'1h.csv', 'w', encoding='UTF8',newline='')
         with myFile as csvfile:
             writer = csv.writer(myFile)
             writer.writerows(newRows)
-        #print("Writing complete on :" + index)
 
    
 @app.route("/DataList", methods=['POST'])
